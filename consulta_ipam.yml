@@ -10,7 +10,7 @@
     db_port: "{{ var_db_port }}"
     db_name: "phpipam"
     db_user: "phpipam"
-    db_password: "{{ var_db_password }}"
+    db_password: "{{ db_password }}"
 
     # --- PARÂMETROS DA OPERAÇÃO (AWX Extra Vars / Survey) ---
     target_ip: "172.20.36.200"
