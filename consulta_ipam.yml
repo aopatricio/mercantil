@@ -9,8 +9,6 @@
     db_host: "{{ var_db_host }}"
     db_port: "{{ var_db_port }}"
     db_name: "phpipam"
-    #db_user: "phpipam"
-    #db_password: "{{ db_password }}"
 
     # --- PARÂMETROS DA OPERAÇÃO (AWX Extra Vars / Survey) ---
     target_ip: "172.20.36.200"
@@ -22,6 +20,7 @@
       ansible.builtin.pip:
         name: pymysql
         state: present
+
     # ----------------------------------------------------------------------
     # 1. VERIFICAÇÃO INICIAL E BUSCA DA SUBNET
     # ----------------------------------------------------------------------
@@ -33,8 +32,16 @@
         login_user: "{{ db_user }}"
         login_password: "{{ db_password }}"
         query:
-          - "SELECT id, subnetId, ip_addr, description FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
-          - "SELECT id, subnet, mask FROM subnets WHERE INET_ATON('{{ target_ip }}') BETWEEN subnet AND (subnet + POW(2, 32 - mask) - 1);"
+          - >
+            SELECT id, subnetId, ip_addr, description 
+            FROM ipaddresses 
+            WHERE ip_addr = INET_ATON('{{ target_ip }}') 
+               OR ip_addr = CAST(INET_ATON('{{ target_ip }}') AS CHAR)
+               OR ip_addr = '{{ target_ip }}';
+          - >
+            SELECT id, subnet, mask 
+            FROM subnets 
+            WHERE INET_ATON('{{ target_ip }}') BETWEEN subnet AND (subnet + POW(2, 32 - mask) - 1);
       register: db_lookup
       no_log: false
 
@@ -114,15 +121,20 @@
         login_user: "{{ db_user }}"
         login_password: "{{ db_password }}"
         query:
-          - "DELETE FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
-      no_log: true
+          - >
+            DELETE FROM ipaddresses 
+            WHERE ip_addr = INET_ATON('{{ target_ip }}') 
+               OR ip_addr = CAST(INET_ATON('{{ target_ip }}') AS CHAR)
+               OR ip_addr = '{{ target_ip }}';
+      no_log: false
       when:
         - operation == "delete"
         - ip_in_use
+      register: db_delete
 
     - name: "[DELETE] Exibir confirmação de remoção"
       ansible.builtin.debug:
-        msg: "SUCESSO: O IP {{ target_ip }} foi removido do phpIPAM."
+        msg: "SUCESSO: O IP {{ target_ip }} foi removido do phpIPAM (Linhas afetadas: {{ db_delete.executed_queries[0] | default('N/A') }})."
       when:
         - operation == "delete"
         - ip_in_use
