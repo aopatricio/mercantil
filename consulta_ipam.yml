@@ -135,7 +135,7 @@
 
     - name: "[DELETE] Exibir confirmação de remoção"
       ansible.builtin.debug:
-        msg: "SUCESSO: O IP {{ target_ip }} foi removido do phpIPAM (Linhas afetadas: {{ db_delete.executed_queries[0] | default('N/A') }})."
+        msg: "SUCESSO: O IP {{ target_ip }} foi removido do phpIPAM."
       when:
         - operation == "delete"
         - ip_in_use
