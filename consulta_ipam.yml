@@ -14,7 +14,7 @@
     #target_ip: "172.20.36.200"
     #ip_description: "Servidor Cadastrado via AWX"
     #operation: "add" # "add" ou "delete"
-    operation: "{{ operation }}"
+    operation: "{{ action }}"
     
   tasks:
     - name: Garantir que o pymysql está instalado no Python do AWX
