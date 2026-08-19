@@ -32,7 +32,7 @@
           - "SELECT id, subnetId, ip_addr, description FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
           - "SELECT id, subnet, mask FROM subnets WHERE INET_ATON('{{ target_ip }}') BETWEEN subnet AND (subnet + POW(2, 32 - mask) - 1);"
       register: db_lookup
-      no_log: true
+      no_log: false
 
     - name: Normalizar retorno da consulta MySQL
       ansible.builtin.set_fact:
