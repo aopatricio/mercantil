@@ -11,9 +11,10 @@
     db_name: "phpipam"
 
     # --- PARÂMETROS DA OPERAÇÃO (AWX Extra Vars / Survey) ---
-    target_ip: "{{ target_ip | default('172.20.36.200') }}"
-    ip_description: "{{ ip_description | default('Servidor Cadastrado via AWX') }}"
-    operation: "{{ operation | default('add') }}"
+    target_ip: "172.20.36.200"
+    ip_description: "Servidor Cadastrado via AWX"
+    operation: "add" # "add" ou "delete"
+
     
   tasks:
     - name: Garantir que o pymysql está instalado no Python do AWX
