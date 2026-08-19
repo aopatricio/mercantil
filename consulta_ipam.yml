@@ -8,7 +8,7 @@
     # --- DADOS DE CONEXÃO AO BANCO ---
     db_host: "{{ var_db_host }}"
     db_port: "{{ var_db_port }}"
-    db_name: "phpipam"
+    db_name: "{{ var_db_name }}"
 
     # --- PARÂMETROS DA OPERAÇÃO (AWX Extra Vars / Survey) ---
     #target_ip: "172.20.36.200"
