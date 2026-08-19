@@ -1,25 +1,25 @@
 ---
-- name: Automação phpIPAM via Conexão Direta MySQL
+- name: Automação phpIPAM via Conexão Direta MySQL (AWX Ready)
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    # --- DADOS DE CONEXÃO AO BANCO ---
-    db_host: "172.20.36.41"       # IP ou hostname do servidor MySQL/MariaDB
-    db_port: 3307               # Porta do MySQL
-    db_name: "phpipam"           # Nome do banco do phpIPAM
-    db_user: "phpipam"           # Usuário do banco
-    db_password: "{{ var_db_password }}" # Senha do banco
+    # Parâmetros que podem vir de Variáveis Globais, Credenciais ou do Inventário do AWX
+    db_host: "172.20.36.41"
+    db_port: 3307
+    db_name: "phpipam"
+    db_user: "phpipam"
+    db_password: "{{ var_db_password }}"
 
-    # --- PARÂMETROS DA OPERAÇÃO ---
+    # Parâmetros preenchidos pela Survey do AWX (Extra Vars)
     target_ip: "172.20.36.200"
-    ip_description: "Servidor Nginx - Cadastro Direto"
-    action: "add" # Opções aceitas: "add" (cadastrar) ou "delete" (remover)
+    ip_description: "Servidor Cadastrado pelo AWX"
+    action: "add" # "add" ou "delete"
 
   tasks:
     # ----------------------------------------------------------------------
-    # 1. VERIFICAÇÃO INICIAL DO IP E BUSCA DA SUBNET
+    # 1. VERIFICAÇÃO INICIAL E BUSCA DA SUBNET
     # ----------------------------------------------------------------------
     - name: Consultar IP e calcular Subnet correspondente no MySQL
       community.mysql.mysql_query:
@@ -32,6 +32,7 @@
           - "SELECT id, subnetId, ip_addr, description FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
           - "SELECT id, subnet, mask FROM subnets WHERE INET_ATON('{{ target_ip }}') BETWEEN subnet AND (subnet + POW(2, 32 - mask) - 1);"
       register: db_lookup
+      no_log: true # Evita exibir a senha nos logs do AWX
 
     - name: Definir variáveis de estado do IP e Subnet
       ansible.builtin.set_fact:
@@ -40,7 +41,7 @@
         subnet_id: "{{ db_lookup.query_result[1][0]['id'] if (db_lookup.query_result[1] | length > 0) else None }}"
 
     # ----------------------------------------------------------------------
-    # 2. FLUXO DE ADIÇÃO/RESERVA DE IP (action == 'add')
+    # 2. FLUXO DE ADIÇÃO DE IP (action == 'add')
     # ----------------------------------------------------------------------
     - name: "[ADD] Alertar se IP já estiver em uso"
       ansible.builtin.debug:
@@ -79,6 +80,7 @@
               '{{ ip_description }}',
               '', '', '', 1, 0, '', '', NOW()
             );
+      no_log: true
       when:
         - action == "add"
         - not ip_in_use
@@ -87,12 +89,7 @@
 
     - name: "[ADD] Exibir confirmação de cadastro"
       ansible.builtin.debug:
-        msg:
-          - "------------------------------------------------"
-          - "SUCESSO: IP {{ target_ip }} CADASTRADO!"
-          - "Descrição: {{ ip_description }}"
-          - "Subnet ID Automática: {{ subnet_id }}"
-          - "------------------------------------------------"
+        msg: "SUCESSO: IP {{ target_ip }} cadastrado no phpIPAM com a Subnet ID {{ subnet_id }}!"
       when:
         - action == "add"
         - not ip_in_use
@@ -110,10 +107,10 @@
         login_password: "{{ db_password }}"
         query:
           - "DELETE FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
+      no_log: true
       when:
         - action == "delete"
         - ip_in_use
-      register: db_delete
 
     - name: "[DELETE] Exibir confirmação de remoção"
       ansible.builtin.debug:
