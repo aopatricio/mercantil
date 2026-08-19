@@ -5,24 +5,24 @@
   gather_facts: false
 
   vars:
-    # Parâmetros que podem vir de Variáveis Globais, Credenciais ou do Inventário do AWX
-    db_host: "172.20.36.41"
-    db_port: 3307
+    # --- DADOS DE CONEXÃO AO BANCO ---
+    db_host: "{{ var_db_host }}"
+    db_port: "{{ var_db_port }}"
     db_name: "phpipam"
     db_user: "phpipam"
     db_password: "{{ var_db_password }}"
 
-    # Parâmetros preenchidos pela Survey do AWX (Extra Vars)
+    # --- PARÂMETROS DA OPERAÇÃO (AWX Extra Vars / Survey) ---
     target_ip: "172.20.36.200"
-    ip_description: "Servidor Cadastrado pelo AWX"
-    action: "add" # "add" ou "delete"
+    ip_description: "Servidor Cadastrado via AWX"
+    operation: "add" # "add" ou "delete"
 
   tasks:
     # ----------------------------------------------------------------------
     # 1. VERIFICAÇÃO INICIAL E BUSCA DA SUBNET
     # ----------------------------------------------------------------------
     - name: Consultar IP e calcular Subnet correspondente no MySQL
-      community.mysql.mysql_query:
+      ansible.mysql.mysql_query:
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
         login_db: "{{ db_name }}"
@@ -32,16 +32,20 @@
           - "SELECT id, subnetId, ip_addr, description FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
           - "SELECT id, subnet, mask FROM subnets WHERE INET_ATON('{{ target_ip }}') BETWEEN subnet AND (subnet + POW(2, 32 - mask) - 1);"
       register: db_lookup
-      no_log: true # Evita exibir a senha nos logs do AWX
+      no_log: true
+
+    - name: Normalizar retorno da consulta MySQL
+      ansible.builtin.set_fact:
+        raw_queries: "{{ db_lookup.query_result | default(db_lookup.executed_queries | default([])) }}"
 
     - name: Definir variáveis de estado do IP e Subnet
       ansible.builtin.set_fact:
-        ip_in_use: "{{ db_lookup.query_result[0] | length > 0 }}"
-        ip_details: "{{ db_lookup.query_result[0][0] if (db_lookup.query_result[0] | length > 0) else {} }}"
-        subnet_id: "{{ db_lookup.query_result[1][0]['id'] if (db_lookup.query_result[1] | length > 0) else None }}"
+        ip_in_use: "{{ (raw_queries[0] | default([])) | length > 0 }}"
+        ip_details: "{{ raw_queries[0][0] if ((raw_queries[0] | default([])) | length > 0) else {} }}"
+        subnet_id: "{{ raw_queries[1][0]['id'] if ((raw_queries[1] | default([])) | length > 0) else None }}"
 
     # ----------------------------------------------------------------------
-    # 2. FLUXO DE ADIÇÃO DE IP (action == 'add')
+    # 2. FLUXO DE ADIÇÃO DE IP (operation == 'add')
     # ----------------------------------------------------------------------
     - name: "[ADD] Alertar se IP já estiver em uso"
       ansible.builtin.debug:
@@ -49,22 +53,22 @@
           - "------------------------------------------------"
           - "ALERTA: O IP {{ target_ip }} JÁ ESTÁ EM USO!"
           - "Descrição: {{ ip_details.description | default('Sem descrição') }}"
-          - "Subnet ID: {{ ip_details.subnetId }}"
+          - "Subnet ID: {{ ip_details.subnetId | default('N/A') }}"
           - "------------------------------------------------"
       when:
-        - action == "add"
+        - operation == "add"
         - ip_in_use
 
     - name: "[ADD] Falhar se Nenhuma Subnet Compatível for Encontrada"
       ansible.builtin.fail:
         msg: "ERRO: O IP {{ target_ip }} não pertence a nenhuma sub-rede cadastrada no phpIPAM."
       when:
-        - action == "add"
+        - operation == "add"
         - not ip_in_use
         - subnet_id is none
 
     - name: "[ADD] Inserir IP no banco phpIPAM"
-      community.mysql.mysql_query:
+      ansible.mysql.mysql_query:
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
         login_db: "{{ db_name }}"
@@ -82,24 +86,24 @@
             );
       no_log: true
       when:
-        - action == "add"
+        - operation == "add"
         - not ip_in_use
         - subnet_id is not none
       register: db_insert
 
     - name: "[ADD] Exibir confirmação de cadastro"
       ansible.builtin.debug:
-        msg: "SUCESSO: IP {{ target_ip }} cadastrado no phpIPAM com a Subnet ID {{ subnet_id }}!"
+        msg: "SUCESSO: IP {{ target_ip }} cadastrado no phpIPAM na Subnet ID {{ subnet_id }}!"
       when:
-        - action == "add"
+        - operation == "add"
         - not ip_in_use
         - db_insert is changed
 
     # ----------------------------------------------------------------------
-    # 3. FLUXO DE REMOÇÃO DE IP (action == 'delete')
+    # 3. FLUXO DE REMOÇÃO DE IP (operation == 'delete')
     # ----------------------------------------------------------------------
     - name: "[DELETE] Remover IP do phpIPAM"
-      community.mysql.mysql_query:
+      ansible.mysql.mysql_query:
         login_host: "{{ db_host }}"
         login_port: "{{ db_port }}"
         login_db: "{{ db_name }}"
@@ -109,19 +113,19 @@
           - "DELETE FROM ipaddresses WHERE ip_addr = INET_ATON('{{ target_ip }}') OR ip_addr = '{{ target_ip }}';"
       no_log: true
       when:
-        - action == "delete"
+        - operation == "delete"
         - ip_in_use
 
     - name: "[DELETE] Exibir confirmação de remoção"
       ansible.builtin.debug:
         msg: "SUCESSO: O IP {{ target_ip }} foi removido do phpIPAM."
       when:
-        - action == "delete"
+        - operation == "delete"
         - ip_in_use
 
     - name: "[DELETE] Alertar se IP não foi encontrado para remoção"
       ansible.builtin.debug:
         msg: "AVISO: O IP {{ target_ip }} não existia no phpIPAM. Nenhuma alteração feita."
       when:
-        - action == "delete"
+        - operation == "delete"
         - not ip_in_use
