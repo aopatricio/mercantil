@@ -18,6 +18,10 @@
     operation: "add" # "add" ou "delete"
 
   tasks:
+    - name: Garantir que o pymysql está instalado no Python do AWX
+      ansible.builtin.pip:
+        name: pymysql
+        state: present
     # ----------------------------------------------------------------------
     # 1. VERIFICAÇÃO INICIAL E BUSCA DA SUBNET
     # ----------------------------------------------------------------------
