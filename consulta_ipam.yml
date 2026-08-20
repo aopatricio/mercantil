@@ -17,6 +17,35 @@
     operation: "{{ action }}"
     
   tasks:
+
+  # ----------------------------------------------------------------------
+  # 1. VERIFICAÇÃO DE ICMP (PING NA REDE)
+  # ----------------------------------------------------------------------
+    - name: "[PING] Testar se o IP responde a requisições ICMP na rede"
+      ansible.builtin.command: "ping -c 2 -W 1 {{ target_ip }}"
+      register: ping_check
+      failed_when: false
+      changed_when: false
+      when: operation == "add"
+
+    - name: "[PING] Definir estado de conectividade do IP"
+      ansible.builtin.set_fact:
+        ip_responding_icmp: "{{ ping_check.rc == 0 }}"
+      when: operation == "add"
+
+    - name: "[PING] Interromper se o IP responder ao Ping (Já em uso na rede)"
+      ansible.builtin.fail:
+        msg: >
+          [CANCELADO] O IP {{ target_ip }} respondeu ao teste de ping (ICMP).
+          Existe uma máquina ativa utilizando este IP na rede, mesmo que não esteja no IPAM!
+      when:
+        - operation == "add"
+        - ip_responding_icmp
+
+  # ----------------------------------------------------------------------
+  # GARANTIR QUE O MODULO ESTA INSTALADO 
+  # ----------------------------------------------------------------------
+          
     - name: Garantir que o pymysql está instalado no Python do AWX
       ansible.builtin.pip:
         name: pymysql
