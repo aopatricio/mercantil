@@ -94,7 +94,7 @@
               {{ subnet_id }},
               INET_ATON('{{ target_ip }}'),
               '{{ ip_description }}',
-              '', '', '', 1, 0, '', '', NOW()
+              '{{ hostname }}', '', '', 1, 0, '', '', NOW()
             );
       no_log: true
       when:
